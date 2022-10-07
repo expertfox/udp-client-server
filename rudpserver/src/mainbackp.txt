@@ -1,0 +1,55 @@
+use std::net::{SocketAddr, UdpSocket};
+use std::thread;
+
+const BufferSize: usize = 1024;
+
+#[derive(Copy, Clone, PartialEq)]
+struct PacketData {
+    acked: bool,
+}
+
+struct Header {
+    sequence: u16,
+    ack: u16,
+    ack_bits: u16,
+}
+
+fn GetPacketData(
+    sequence: u16,
+    sequence_buffer: &[u16; BufferSize],
+    packet_data: &[PacketData; BufferSize],
+) -> PacketData {
+    let index: usize = (sequence % 1024).into();
+    if sequence_buffer[index] == sequence {
+        return packet_data[index];
+    } else {
+        let defaultPacketData = PacketData { acked: true };
+        return defaultPacketData;
+    }
+}
+
+fn main() {
+    let socket = UdpSocket::bind("0.0.0.0:8888").expect("Could not bind socket");
+
+    let sequence_buffer: [u16; BufferSize] = [0; BufferSize];
+    let defaultPacketData = PacketData { acked: true };
+
+    let packet_data: [PacketData; BufferSize] = [defaultPacketData; BufferSize];
+
+    loop {
+        let mut buf = [0u8; 1500];
+        let sock = socket.try_clone().expect("Failed to clone socket");
+        match socket.recv_from(&mut buf) {
+            Ok((_, src)) => {
+                thread::spawn(move || {
+                    println!("Handling connection from {}", src);
+                    sock.send_to(&buf, &src).expect("Failed to send a response");
+                });
+            }
+            Err(e) => {
+                eprintln!("couldn't recieve a datagram: {}", e);
+            }
+        }
+    }
+}
+
